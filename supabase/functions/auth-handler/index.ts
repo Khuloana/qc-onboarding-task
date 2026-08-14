@@ -241,9 +241,13 @@ Deno.serve(async (req) => {
             });
 
             if (profileError) {
+
+                console.error("Profile insert error:", profileError);
+
                 return new Response(
                     JSON.stringify({
                         error: "User account created, but the profile could not be created.",
+                        details: profileError.message,
                     }),
                     {
                         status: 500,
@@ -287,19 +291,38 @@ Deno.serve(async (req) => {
                         },
                     );
                 }
+            
+
+            const password = body.password;
+
+            if (!password) {
+                return new Response(
+                    JSON.stringify({
+                        error: "Password is required for login.",
+                    }),
+                    {
+                        status: 400,
+                        headers: {
+                            ...corsHeaders,
+                            "Content-Type": "application/json",
+                        },
+                    },
+                );
             }
 
-            const {data: lockout, error: lockoutError} = await supabase
+            const { data: previousLockout, error: previousLockoutError,} = await supabase
             .from("account_lockouts")
             .select("locked_until, lockout_type")
             .eq("email", email)
-            .gt("lockout_unti", new Date().toISOString())
             .maybeSingle();
 
-            if (lockoutError) {
+            if (previousLockoutError) {
+                console.error("Previous lockout check error:", previousLockoutError);
+                
                 return new Response(
                     JSON.stringify({
-                        error: "Unable to check lockout status.",
+                        error: "Unable to check previous lockout status.",
+                        details: previousLockoutError.message,
                     }),
                     {
                         status: 500,
@@ -311,20 +334,138 @@ Deno.serve(async (req) => {
                 );
             }
 
-            if (lockout) {
-                const lockoutUntil = new Date(lockout.lockout_until);
+            if (previousLockout) {
+                const lockoutUntil = new Date(previousLockout.locked_until);
                 const now = new Date();
 
-                const remainingMilliseconds =
-                    lockoutUntil.getTime() - now.getTime();
-                
-                const remainingMinutes = Math.ceil(remainingMilliseconds / 60000,
+                if (lockoutUntil > now) {
+                    const remainingMilliseconds =
+                        lockoutUntil.getTime() - now.getTime();
+                    
+                    const remainingMinutes = Math.ceil(remainingMilliseconds / 60000);
 
+                    return new Response(
+                        JSON.stringify({
+                            error: `Account is locked due to multiple failed login attempts. Please try again in ${remainingMinutes} minute(s).`,
+                        }),
+                        {
+                            status: 429,
+                            headers: {
+                                ...corsHeaders,
+                                "Content-Type": "application/json",
+                            },
+                        },
+                    );
+                }
+                
+            }
+            
+
+            const tenMinutesAgo = new Date(
+                Date.now() - 10 * 60 * 1000)
+                .toISOString();
+            
+            const {count: failedAttemptsCount, error: failedAttemptsError} =
+            await supabase
+            .from("login_attempts")
+            .select("*", { count: "exact", head: true })
+            .eq("email", email)
+            .eq("success", false)
+            .gte("attempted_at", tenMinutesAgo);
+
+            if (failedAttemptsError) {
+                console.error("Failed login attempts check error:", failedAttemptsError);
+                
+                return new Response(
+                    JSON.stringify({
+                        error: "Unable to check failed login attempts.",
+                        details: failedAttemptsError.message,
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            "Content-Type": "application/json",
+                        },
+                    },
                 );
+            }
+
+
+            const { data: loginData, error: loginError } =
+            await supabase.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+
+            if (loginError) {
+                console.error("Login error:", loginError);
+
+                const { error: attemptError } = await supabase
+                .from("login_attempts")
+                .insert({
+                    email: email,
+                    success: false,
+                });
+
+                if (attemptError) {
+                    console.error("Failed login attempt recording error:",
+                        attemptError,
+                    );
+
+                    return new Response(
+                        JSON.stringify({
+                            error: "Unable to record login attempt.",
+                        }),
+                        {
+                            status: 500,
+                            headers: {
+                                ...corsHeaders,
+                                "Content-Type": "application/json",
+                            },
+                        },
+                    );
+                }
+
+                if ((failedAttemptsCount ?? 0) >= 2) {
+                    const shortlockoutUntil = new Date(
+                        Date.now() + 10 * 60 * 1000)
+                        .toISOString();
+                    
+                        const { error: shortlockoutError } = await supabase
+                        .from("account_lockouts")
+                        .upsert({
+                            email: email,
+                            locked_until: shortlockoutUntil,
+                            lockout_type: "short",
+                        },
+                        {
+                            onConflict: "email",
+                        },
+                    );
+                    if (shortlockoutError) {
+                    console.error("Short lockout error:",
+                        shortlockoutError,
+                    );
+
+                    return new Response(
+                        JSON.stringify({
+                            error: "Unable to apply apply account lockout.",
+                            details: shortlockoutError.message,
+                        }),
+                        {
+                            status: 500,
+                            headers: {
+                                ...corsHeaders,
+                                "Content-Type": "application/json",
+                            },
+                        },
+                    );
+                }
 
                 return new Response(
                     JSON.stringify({
-                        error: `Account is locked due to multiple failed login attempts. Please try again in ${remainingMinutes} minute(s).`,
+                        error: "Too many failed login attempts. Your account has been locked for 10 minutes.",
                     }),
                     {
                         status: 429,
@@ -335,10 +476,61 @@ Deno.serve(async (req) => {
                     },
                 );
             }
+
+                return new Response(
+                    JSON.stringify({
+                        error: "Invalid email or password.",
+                        details: loginError.message,
+                    }),
+                    {
+                        status: 401,
+                        headers: {
+                            ...corsHeaders,
+                            "Content-Type": "application/json",
+                        },
+                    },
+                );
+            }
+
+            const { error: successAttemptError } = await supabase
+            .from("login_attempts")
+            .insert({
+                email: email,
+                success: true,
+            });
+
+            if (successAttemptError) {
+                console.error("Successful login attempt recording error:",
+                    successAttemptError,
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        error: "Login successful, but the login attempt could not be recorded.",
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            "Content-Type": "application/json",
+                        },
+                    },
+                );
+            }
+
+            const { error: deleteLockoutError,
+            } = await supabase.from("account_lockouts")
+            .delete()
+            .eq("email", email);
+
+            if (deleteLockoutError) {
+                console.error("Lockout deletion error:", deleteLockoutError);
             
-            return new Response(
+                return new Response(
                 JSON.stringify({
-                    message: "No active lockout found.",
+                    message: "Login successful.",
+                    user: loginData.user,
+                    session: loginData.session,
                 }),
                 {
                     status: 200,
@@ -348,6 +540,7 @@ Deno.serve(async (req) => {
                     },
                 },
             );
+        }
 
         return new Response(
             JSON.stringify({
@@ -361,19 +554,22 @@ Deno.serve(async (req) => {
                 },
             },
         );
-    } catch (error) {
+    }
+}catch (error) {
+        console.error("Error processing request:", error);
         return new Response(
             JSON.stringify({
-                error: "Invalid JSON body.",
+                error: error instanceof SyntaxError
+                    ? "Invalid JSON body."
+                    : "An error occurred processing your request.",
             }),
             {
-                status: 400,
+                status: error instanceof SyntaxError ? 400 : 500,
                 headers: {
                     ...corsHeaders,
                     "Content-Type": "application/json",
                 },
             },
         );
-        
     }
 });
