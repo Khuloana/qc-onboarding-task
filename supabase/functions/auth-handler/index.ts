@@ -1,9 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+console.log("AUTH HANDLER VERSION: SIGNUP LOGIN CODE 2026-08-15");
+
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
 };
 
 const supabaseUrl = Deno.env.get("PROJECT_URL");
@@ -18,558 +20,436 @@ const supabase = createClient(
     serviceRoleKey
 );
 
+function jsonResponse(
+    data: Record<string, unknown>,
+    status = 200
+) {
+    return new Response(
+        JSON.stringify(data),
+        {
+            status,
+            headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+}
+
 Deno.serve(async (req) => {
-    if(req.method === "OPTIONS") {
+    if (req.method === "OPTIONS") {
         return new Response(null, {
             status: 204,
-            headers: corsHeaders,
+            headers: corsHeaders
         });
     }
-    try{
+
+    if (req.method !== "POST") {
+        return jsonResponse(
+            {
+                error: "Method not allowed."
+            },
+            405
+        );
+    }
+
+    try {
         const contentLength = req.headers.get("content-length");
 
-        if(contentLength && Number(contentLength) > 8192) {
-            return new Response(
-                JSON.stringify({
-                    error: "Request body is too large. Maximum allowed size is 8KB.",
-                }),
+        if (
+            contentLength &&
+            Number(contentLength) > 8192
+        ) {
+            return jsonResponse(
                 {
-                    status: 413,
-                    headers: {
-                        ...corsHeaders,
-                        "Content-Type": "application/json",
-                    },
+                    error:
+                        "Request body is too large. Maximum allowed size is 8KB."
                 },
+                413
             );
         }
 
         const body = await req.json();
         const action = body.action;
 
-        if(action === "signup") {
-
+        if (action === "signup") {
             const firstName = body.first_name?.trim();
-
-            if (!firstName) {
-                return new Response(
-                    JSON.stringify({
-                        error: "First name is required for signup.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            if(!/^[A-Za-z ]+$/.test(firstName)) {
-                return new Response(
-                    JSON.stringify({
-                        error: "First name must contain only letters and spaces.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
             const lastName = body.last_name?.trim();
-
-            if (!lastName) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Last name is required for signup.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            if(!/^[A-Za-z ]+$/.test(lastName)) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Last name must contain only letters and spaces.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
             const phone = body.phone?.trim();
-
-            if (!phone) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Phone number is required for signup.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            if(!/^0\d+$/.test(phone)) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Phone number must start with 0 and contain only digits.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            const email = body.email?.trim();
-
-            if (!email) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Email is required for signup.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Please provide a valid email address.",
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
+            const email = body.email?.trim().toLowerCase();
             const password = body.password;
 
-            if (!password) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Password is required for signup.",
-                    }),
+            if (!firstName) {
+                return jsonResponse(
                     {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error: "First name is required for signup."
                     },
+                    400
                 );
             }
 
-            const {data, error} = await supabase.auth.admin.createUser({
+            if (!/^[A-Za-z ]+$/.test(firstName)) {
+                return jsonResponse(
+                    {
+                        error:
+                            "First name must contain only letters and spaces."
+                    },
+                    400
+                );
+            }
+
+            if (!lastName) {
+                return jsonResponse(
+                    {
+                        error: "Last name is required for signup."
+                    },
+                    400
+                );
+            }
+
+            if (!/^[A-Za-z ]+$/.test(lastName)) {
+                return jsonResponse(
+                    {
+                        error:
+                            "Last name must contain only letters and spaces."
+                    },
+                    400
+                );
+            }
+
+            if (!phone) {
+                return jsonResponse(
+                    {
+                        error: "Phone number is required for signup."
+                    },
+                    400
+                );
+            }
+
+            if (!/^0\d+$/.test(phone)) {
+                return jsonResponse(
+                    {
+                        error:
+                            "Phone number must start with 0 and contain only digits."
+                    },
+                    400
+                );
+            }
+
+            if (!email) {
+                return jsonResponse(
+                    {
+                        error: "Email is required for signup."
+                    },
+                    400
+                );
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return jsonResponse(
+                    {
+                        error:
+                            "Please provide a valid email address."
+                    },
+                    400
+                );
+            }
+
+            if (!password) {
+                return jsonResponse(
+                    {
+                        error: "Password is required for signup."
+                    },
+                    400
+                );
+            }
+
+            const {
+                data,
+                error
+            } = await supabase.auth.admin.createUser({
                 email,
                 password,
-                email_confirm: true,
+                email_confirm: true
             });
 
             if (error) {
-                return new Response(
-                    JSON.stringify({
-                        error: error.message,
-                    }),
+                console.error(
+                    "User creation error:",
+                    error
+                );
+
+                return jsonResponse(
                     {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error: error.message
                     },
+                    400
                 );
             }
 
-            const user = data.user;
-
-            if (!user) {
-                return new Response(
-                    JSON.stringify({
-                        error: "User account could not be created.",
-                    }),
+            if (!data.user) {
+                return jsonResponse(
                     {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error:
+                            "User account could not be created."
                     },
+                    500
                 );
             }
 
-            const { error: profileError } = await supabase
-            .from("profiles")
-            .insert({
-                id: user.id,
-                first_name: firstName,
-                last_name: lastName,
-                phone: phone,
-            });
+            const {
+                error: profileError
+            } = await supabase
+                .from("profiles")
+                .insert({
+                    id: data.user.id,
+                    first_name: firstName,
+                    last_name: lastName,
+                    phone
+                });
 
             if (profileError) {
+                console.error(
+                    "Profile insert error:",
+                    profileError
+                );
 
-                console.error("Profile insert error:", profileError);
-
-                return new Response(
-                    JSON.stringify({
-                        error: "User account created, but the profile could not be created.",
-                        details: profileError.message,
-                    }),
+                return jsonResponse(
                     {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error:
+                            "User account was created, but the profile could not be created."
                     },
+                    500
                 );
             }
 
-            return new Response(
-                JSON.stringify({
-                    message: "Signup successful. Please log in.",
-                }),
+            return jsonResponse(
                 {
-                    status: 201,
-                    headers: {
-                        ...corsHeaders,
-                        "Content-Type": "application/json",
-                    },
+                    message:
+                        "Signup successful. Please log in."
                 },
+                201
             );
         }
-    
 
-            if(action === "login") {
-                const email = body.email?.trim().toLowerCase();
-
-                if (!email) {
-                    return new Response(
-                        JSON.stringify({
-                            error: "Email is required for login.",
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                "Content-Type": "application/json",
-                            },
-                        },
-                    );
-                }
-            
-
+        if (action === "login") {
+            const email = body.email?.trim().toLowerCase();
             const password = body.password;
 
+            if (!email) {
+                return jsonResponse(
+                    {
+                        error: "Email is required for login."
+                    },
+                    400
+                );
+            }
+
             if (!password) {
-                return new Response(
-                    JSON.stringify({
-                        error: "Password is required for login.",
-                    }),
+                return jsonResponse(
                     {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error: "Password is required for login."
                     },
+                    400
                 );
             }
 
-            const { data: previousLockout, error: previousLockoutError,} = await supabase
-            .from("account_lockouts")
-            .select("locked_until, lockout_type")
-            .eq("email", email)
-            .maybeSingle();
+            const {
+                data: lockout,
+                error: lockoutCheckError
+            } = await supabase
+                .from("account_lockouts")
+                .select(
+                    "locked_until, lockout_type"
+                )
+                .eq("email", email)
+                .maybeSingle();
 
-            if (previousLockoutError) {
-                console.error("Previous lockout check error:", previousLockoutError);
-                
-                return new Response(
-                    JSON.stringify({
-                        error: "Unable to check previous lockout status.",
-                        details: previousLockoutError.message,
-                    }),
+            if (lockoutCheckError) {
+                console.error(
+                    "Lockout check error:",
+                    lockoutCheckError
+                );
+
+                return jsonResponse(
                     {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error:
+                            "Unable to check account lockout status."
                     },
+                    500
                 );
             }
 
-            if (previousLockout) {
-                const lockoutUntil = new Date(previousLockout.locked_until);
-                const now = new Date();
+            if (lockout) {
+                const lockedUntil =
+                    new Date(lockout.locked_until);
 
-                if (lockoutUntil > now) {
-                    const remainingMilliseconds =
-                        lockoutUntil.getTime() - now.getTime();
-                    
-                    const remainingMinutes = Math.ceil(remainingMilliseconds / 60000);
+                if (lockedUntil > new Date()) {
+                    const minutes = Math.ceil(
+                        (
+                            lockedUntil.getTime() -
+                            Date.now()
+                        ) / 60000
+                    );
 
-                    return new Response(
-                        JSON.stringify({
-                            error: `Account is locked due to multiple failed login attempts. Please try again in ${remainingMinutes} minute(s).`,
-                        }),
+                    return jsonResponse(
                         {
-                            status: 429,
-                            headers: {
-                                ...corsHeaders,
-                                "Content-Type": "application/json",
-                            },
+                            error:
+                                `Account is locked. Please try again in ${minutes} minute(s).`
                         },
+                        429
                     );
                 }
-                
+
+                await supabase
+                    .from("account_lockouts")
+                    .delete()
+                    .eq("email", email);
             }
-            
 
-            const tenMinutesAgo = new Date(
-                Date.now() - 10 * 60 * 1000)
-                .toISOString();
-            
-            const {count: failedAttemptsCount, error: failedAttemptsError} =
-            await supabase
-            .from("login_attempts")
-            .select("*", { count: "exact", head: true })
-            .eq("email", email)
-            .eq("success", false)
-            .gte("attempted_at", tenMinutesAgo);
+            const tenMinutesAgo =
+                new Date(
+                    Date.now() -
+                    10 * 60 * 1000
+                ).toISOString();
 
-            if (failedAttemptsError) {
-                console.error("Failed login attempts check error:", failedAttemptsError);
-                
-                return new Response(
-                    JSON.stringify({
-                        error: "Unable to check failed login attempts.",
-                        details: failedAttemptsError.message,
-                    }),
+            const {
+                count: failedCount,
+                error: countError
+            } = await supabase
+                .from("login_attempts")
+                .select("*", {
+                    count: "exact",
+                    head: true
+                })
+                .eq("email", email)
+                .eq("success", false)
+                .gte(
+                    "attempted_at",
+                    tenMinutesAgo
+                );
+
+            if (countError) {
+                console.error(
+                    "Failed attempt count error:",
+                    countError
+                );
+
+                return jsonResponse(
                     {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
+                        error:
+                            "Unable to check login attempts."
                     },
+                    500
                 );
             }
 
-
-            const { data: loginData, error: loginError } =
-            await supabase.auth.signInWithPassword({
-                email: email,
-                password: password
+            const {
+                data: loginData,
+                error: loginError
+            } = await supabase.auth.signInWithPassword({
+                email,
+                password
             });
 
             if (loginError) {
-                console.error("Login error:", loginError);
+                await supabase
+                    .from("login_attempts")
+                    .insert({
+                        email,
+                        success: false
+                    });
 
-                const { error: attemptError } = await supabase
+                if ((failedCount ?? 0) >= 2) {
+                    const shortLockout =
+                        new Date(
+                            Date.now() +
+                            10 * 60 * 1000
+                        ).toISOString();
+
+                    await supabase
+                        .from("account_lockouts")
+                        .upsert(
+                            {
+                                email,
+                                locked_until:
+                                    shortLockout,
+                                lockout_type:
+                                    "short"
+                            },
+                            {
+                                onConflict: "email"
+                            }
+                        );
+
+                    return jsonResponse(
+                        {
+                            error:
+                                "Too many failed login attempts. Your account has been locked for 10 minutes."
+                        },
+                        429
+                    );
+                }
+
+                return jsonResponse(
+                    {
+                        error:
+                            "Invalid email or password."
+                    },
+                    401
+                );
+            }
+
+            await supabase
                 .from("login_attempts")
                 .insert({
-                    email: email,
-                    success: false,
+                    email,
+                    success: true
                 });
 
-                if (attemptError) {
-                    console.error("Failed login attempt recording error:",
-                        attemptError,
-                    );
+            await supabase
+                .from("account_lockouts")
+                .delete()
+                .eq("email", email);
 
-                    return new Response(
-                        JSON.stringify({
-                            error: "Unable to record login attempt.",
-                        }),
-                        {
-                            status: 500,
-                            headers: {
-                                ...corsHeaders,
-                                "Content-Type": "application/json",
-                            },
-                        },
-                    );
-                }
-
-                if ((failedAttemptsCount ?? 0) >= 2) {
-                    const shortlockoutUntil = new Date(
-                        Date.now() + 10 * 60 * 1000)
-                        .toISOString();
-                    
-                        const { error: shortlockoutError } = await supabase
-                        .from("account_lockouts")
-                        .upsert({
-                            email: email,
-                            locked_until: shortlockoutUntil,
-                            lockout_type: "short",
-                        },
-                        {
-                            onConflict: "email",
-                        },
-                    );
-                    if (shortlockoutError) {
-                    console.error("Short lockout error:",
-                        shortlockoutError,
-                    );
-
-                    return new Response(
-                        JSON.stringify({
-                            error: "Unable to apply apply account lockout.",
-                            details: shortlockoutError.message,
-                        }),
-                        {
-                            status: 500,
-                            headers: {
-                                ...corsHeaders,
-                                "Content-Type": "application/json",
-                            },
-                        },
-                    );
-                }
-
-                return new Response(
-                    JSON.stringify({
-                        error: "Too many failed login attempts. Your account has been locked for 10 minutes.",
-                    }),
-                    {
-                        status: 429,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-                return new Response(
-                    JSON.stringify({
-                        error: "Invalid email or password.",
-                        details: loginError.message,
-                    }),
-                    {
-                        status: 401,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            const { error: successAttemptError } = await supabase
-            .from("login_attempts")
-            .insert({
-                email: email,
-                success: true,
-            });
-
-            if (successAttemptError) {
-                console.error("Successful login attempt recording error:",
-                    successAttemptError,
-                );
-
-                return new Response(
-                    JSON.stringify({
-                        error: "Login successful, but the login attempt could not be recorded.",
-                    }),
-                    {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
-            }
-
-            const { error: deleteLockoutError,
-            } = await supabase.from("account_lockouts")
-            .delete()
-            .eq("email", email);
-
-            if (deleteLockoutError) {
-                console.error("Lockout deletion error:", deleteLockoutError);
-            
-                return new Response(
-                JSON.stringify({
+            return jsonResponse(
+                {
                     message: "Login successful.",
                     user: loginData.user,
-                    session: loginData.session,
-                }),
-                {
-                    status: 200,
-                    headers: {
-                        ...corsHeaders,
-                        "Content-Type": "application/json",
-                    },
+                    session: loginData.session
                 },
+                200
             );
         }
 
-        return new Response(
-            JSON.stringify({
-                error: "Invalid action. Use signup or login.",
-            }),
+        return jsonResponse(
             {
-                status: 400,
-                headers: {
-                    ...corsHeaders,
-                    "Content-Type": "application/json",
-                },
+                error:
+                    "Invalid action. Use signup or login."
             },
+            400
         );
-    }
-}catch (error) {
-        console.error("Error processing request:", error);
-        return new Response(
-            JSON.stringify({
-                error: error instanceof SyntaxError
-                    ? "Invalid JSON body."
-                    : "An error occurred processing your request.",
-            }),
-            {
-                status: error instanceof SyntaxError ? 400 : 500,
-                headers: {
-                    ...corsHeaders,
-                    "Content-Type": "application/json",
+    } catch (error) {
+        console.error(
+            "Auth handler error:",
+            error
+        );
+
+        if (error instanceof SyntaxError) {
+            return jsonResponse(
+                {
+                    error: "Invalid JSON body."
                 },
+                400
+            );
+        }
+
+        return jsonResponse(
+            {
+                error:
+                    "An error occurred processing your request."
             },
+            500
         );
     }
 });
