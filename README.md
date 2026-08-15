@@ -177,3 +177,7 @@ The application was tested for:
 The completed project is maintained in the GitHub repository:
 
 `Khuloana/qc-onboarding-task`
+
+## Submission
+
+Final submission for the QueryCrest Full-Stack Developer onboarding task.
