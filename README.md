@@ -1,5 +1,3 @@
-read me 
-
 # QueryCrest Full-Stack Onboarding Task
 
 ## Overview
